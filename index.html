@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Free Snooker Tournament Bracket Maker by Never Mutanga. Generate draws with scoring, byes and automatic progression.">
+<title>Snooker Bracket Maker by Never Mutanga</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #0a192f; color: #fff; padding: 20px; }
+  h1 { color: #64ffda; text-align: center; font-size: 22px; }
+.subtitle { text-align: center; color: #8892b0; font-size: 13px; margin-top: -5px; }
+.instructions { background: #112240; padding: 15px; border-radius: 10px; margin: 15px 0; font-size: 14px; color: #8892b0; }
+  textarea { width: 100%; height: 100px; padding: 10px; border-radius: 8px; border: none; font-size: 16px; background: #233554; color: #fff; }
+.player-count { color: #64ffda; font-size: 14px; margin-top: 5px; font-weight: bold; }
+  input[type="number"], input[type="text"] { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: none; font-size: 16px; background: #233554; color: #fff; text-align: center; font-weight: bold; }
+  input.error { outline: 2px solid #ff5555!important; background: #3a1e1e!important; }
+.settings { background: #112240; padding: 15px; border-radius: 10px; margin: 15px 0; }
+  button { width: 32%; padding: 15px; margin-top: 10px; background: #64ffda; color: #0a192f; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+.btn-row { display: flex; justify-content: space-between; gap: 2%; flex-wrap: wrap; }
+.btn-share { background: #25D366; color: #fff; }
+.btn-download { background: #4A90E2; color: #fff; }
+.btn-danger { background: #ff5555; color: #fff; }
+.round { background: #112240; padding: 15px; margin-top: 20px; border-radius: 10px; }
+.round h2 { color: #64ffda; margin: 0 0 10px 0; font-size: 18px; }
+.match { background: #233554; padding: 10px; margin: 8px 0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+.match.winner { background: #1e3a2e; border-left: 4px solid #64ffda; }
+.match-name { flex: 1; font-size: 15px; }
+.match-name.waiting { color: #8892b0; font-style: italic; }
+.score-box { display: flex; align-items: center; }
+.bye-info { color: #64ffda; font-style: italic; margin: 5px 0 15px 0; }
+.tournament-title { text-align: center; color: #64ffda; font-size: 20px; font-weight: bold; margin-bottom: 15px; }
+.signature { text-align: center; margin-top: 30px; padding: 15px; color: #8892b0; font-size: 14px; border-top: 1px solid #233554; }
+  #output { display: none; }
+  label { margin-top: 10px; display: block; color: #8892b0; font-size: 14px; }
+  #bracketArea { background: #0a192f; padding: 10px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+
+<h1>🏆 Snooker Bracket Maker</h1>
+<div class="subtitle">Made by <b>Never Mutanga</b></div>
+
+<div class="instructions">
+<b>How to use:</b><br>
+1. Enter Tournament Name<br>
+2. Paste player names separated by commas<br>
+3. Set "Race to" for each round<br>
+4. Click Generate Draw<br>
+5. Use Share or Download for WhatsApp
+</div>
+
+<label>Tournament Name:</label>
+<input type="text" id="tournamentName" placeholder="Harare Open 2026" value="Harare Open 2026">
+
+<p>Enter names separated by commas</p>
+<textarea id="players" placeholder="Type names here..." oninput="updateCount()"></textarea>
+<div class="player-count" id="playerCount">Players entered: 0</div>
+
+<div class="settings">
+<label>All Rounds - Race to:</label>
+<input type="number" id="race" value="5" min="1" max="35">
+
+<label>Final - Race to:</label>
+<input type="number" id="finalRace" value="7" min="1" max="35">
+</div>
+
+<div class="btn-row">
+<button id="genBtn">Generate Draw</button>
+<button id="shareBtn" class="btn-share">📤 Share</button>
+<button id="downloadBtn" class="btn-download">📸 Download</button>
+<button id="resetBtn" class="btn-danger" style="width:100%">New Tournament</button>
+</div>
+
+<div id="bracketArea">
+  <div id="output"></div>
+</div>
+
+<div class="signature">
+  Code made by <b>Never Mutanga</b> © 2026
+</div>
+
+<script>
+let tournamentData = [];
+let isRendering = false;
+const STORAGE_KEY = 'snookerTournament_v7_2_never';
+
+document.getElementById('genBtn').addEventListener('click', generateDraw);
+document.getElementById('resetBtn').addEventListener('click', resetDraw);
+document.getElementById('shareBtn').addEventListener('click', shareBracket);
+document.getElementById('downloadBtn').addEventListener('click', downloadBracket);
+
+function updateCount() {
+  let players = document.getElementById('players').value.split(',').map(s => s.trim()).filter(s => s);
+  document.getElementById('playerCount').textContent = `Players entered: ${players.length}`;
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    tournamentName: document.getElementById('tournamentName').value,
+    players: document.getElementById('players').value,
+    race: document.getElementById('race').value,
+    finalRace: document.getElementById('finalRace').value,
+    tournamentData: tournamentData
+  }));
+}
+
+function loadData() {
+  let data = localStorage.getItem(STORAGE_KEY);
+  if (!data) return;
+  data = JSON.parse(data);
+  document.getElementById('tournamentName').value = data.tournamentName || '';
+  document.getElementById('players').value = data.players;
+  document.getElementById('race').value = data.race;
+  document.getElementById('finalRace').value = data.finalRace;
+  tournamentData = data.tournamentData || [];
+  updateCount();
+  if(tournamentData.length > 0) renderBracket(true);
+}
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function nextPowerOf2(n) {
+  return Math.pow(2, Math.ceil(Math.log2(n)));
+}
+
+function getRoundName(count, hasByes) {
+  // FIX 1: Show QUALIFYING instead of LAST 256 when there are byes
+  if (hasByes && count >= 128) return "QUALIFYING";
+  if (count === 2) return "FINAL";
+  if (count === 4) return "SEMIS";
+  if (count === 8) return "QUARTERFINALS";
+  if (count === 16) return "LAST 16";
+  if (count === 32) return "LAST 32";
+  if (count === 64) return "LAST 64";
+  if (count === 128) return "LAST 128";
+  if (count === 256) return "LAST 256";
+  return `LAST ${count}`;
+}
+
+function buildBracket(players) {
+  let bracket = [];
+  let currentPlayers = shuffle([...players]);
+
+  while(currentPlayers.length > 1){
+    let roundSize = nextPowerOf2(currentPlayers.length);
+    let byes = roundSize - currentPlayers.length;
+    let playingCount = currentPlayers.length - byes;
+
+    let matches = [];
+    for(let i=0; i<playingCount; i+=2){
+      matches.push({p1: currentPlayers[i], p2: currentPlayers[i+1], score1: null, score2: null, winner: null});
+    }
+
+    let byePlayers = currentPlayers.slice(playingCount);
+    bracket.push({ size: roundSize, matches: matches, byes: byePlayers, hasByes: byes > 0 });
+
+    if(matches.length + byePlayers.length <= 1) break;
+    currentPlayers = new Array(matches.length + byePlayers.length).fill("TBD");
+  }
+  return bracket;
+}
+
+function updateScore(rIdx, mIdx) {
+  if(isRendering) return;
+  let race = rIdx === tournamentData.length - 1? parseInt(document.getElementById('finalRace').value) : parseInt(document.getElementById('race').value);
+  let match = tournamentData[rIdx].matches[mIdx];
+  let s1El = document.getElementById(`s${rIdx}-${mIdx}-1`);
+  let s2El = document.getElementById(`s${rIdx}-${mIdx}-2`);
+  let matchDiv = document.getElementById(`m${rIdx}-${mIdx}`);
+
+  let score1 = s1El.value === ''? null : parseInt(s1El.value);
+  let score2 = s2El.value === ''? null : parseInt(s2El.value);
+
+  let hasError = false;
+  s1El.classList.remove('error'); s2El.classList.remove('error'); matchDiv.classList.remove('winner');
+
+  if ((score1!== null && score1 > race) || (score2!== null && score2 > race)) {
+    if (score1!== null && score1 > race) s1El.classList.add('error');
+    if (score2!== null && score2 > race) s2El.classList.add('error');
+    hasError = true;
+  }
+  if (score1!== null && score2!== null && score1 === score2 && score1 > 0) {
+    s1El.classList.add('error'); s2El.classList.add('error'); hasError = true;
+  }
+
+  if(hasError){ match.score1 = null; match.score2 = null; match.winner = null; return; }
+
+  match.score1 = score1; match.score2 = score2;
+
+  if (score1!== null && score1 >= race) { match.winner = match.p1; matchDiv.classList.add('winner'); }
+  else if (score2!== null && score2 >= race) { match.winner = match.p2; matchDiv.classList.add('winner'); }
+  else { match.winner = null; }
+
+  propagateWinners(); saveData();
+}
+
+function propagateWinners(){
+  isRendering = true;
+  for(let r=1; r<tournamentData.length; r++){
+    let prev = tournamentData[r-1]; let curr = tournamentData[r];
+    let prevRoundComplete = prev.matches.every(m => m.winner!== null);
+    if(prevRoundComplete){
+      let winners = prev.matches.map(m => m.winner).concat(prev.byes);
+      for(let i=0; i<curr.matches.length; i++){
+        let p1 = winners[i*2] || "TBD"; let p2 = winners[i*2 + 1] || "TBD";
+        if(curr.matches[i].p1!== p1 || curr.matches[i].p2!== p2){
+          curr.matches[i].p1 = p1; curr.matches[i].p2 = p2; updateMatchDOM(r, i);
+        }
+      }
+    }
+  }
+  isRendering = false;
+}
+
+function updateMatchDOM(rIdx, mIdx){
+  let match = tournamentData[rIdx].matches[mIdx];
+  let matchDiv = document.getElementById(`m${rIdx}-${mIdx}`); if(!matchDiv) return;
+  let displayP1 = match.p1 === "TBD"? "Waiting..." : match.p1;
+  let displayP2 = match.p2 === "TBD"? "Waiting..." : match.p2;
+  let waitingClass = (match.p1 === "TBD" || match.p2 === "TBD")? 'waiting' : '';
+  let nameSpan = matchDiv.querySelector('.match-name');
+  nameSpan.className = `match-name ${waitingClass}`;
+  nameSpan.textContent = `${displayP1} vs ${displayP2}`;
+}
+
+function renderBracket(fullRender = false){
+  if(!fullRender) return;
+  isRendering = true;
+  let raceTo = parseInt(document.getElementById('race').value);
+  let finalRaceTo = parseInt(document.getElementById('finalRace').value);
+  let tournamentName = document.getElementById('tournamentName').value;
+  let output = `<div class="tournament-title">${tournamentName}</div>`;
+  output += `<h2>### TOURNAMENT BRACKET ###</h2>`;
+
+  tournamentData.forEach((round, rIdx) => {
+    let race = rIdx === tournamentData.length - 1? finalRaceTo : raceTo;
+    let roundName = getRoundName(round.size, round.hasByes);
+    output += `<div class="round"><h2>${roundName}: Race to ${race} - ${round.matches.length} matches</h2>`;
+    if(round.byes.length > 0){
+      output += `<div class="bye-info">${round.byes.length} Players get a bye to ${getRoundName(round.size/2, false)}</div>`;
+    }
+    round.matches.forEach((match, mIdx) => {
+      let displayP1 = match.p1 === "TBD"? "Waiting..." : match.p1;
+      let displayP2 = match.p2 === "TBD"? "Waiting..." : match.p2;
+      let waitingClass = (match.p1 === "TBD" || match.p2 === "TBD")? 'waiting' : '';
+      let winnerClass = match.winner? 'winner' : '';
+      let val1 = match.score1 === null? '' : match.score1;
+      let val2 = match.score2 === null? '' : match.score2;
+      output += `<div class="match ${winnerClass}" id="m${rIdx}-${mIdx}">`;
+      output += `<span class="match-name ${waitingClass}">${displayP1} vs ${displayP2}</span>`;
+      output += `<div class="score-box">`;
+      output += `<input type="number" id="s${rIdx}-${mIdx}-1" value="${val1}" min="0" max="${race}" oninput="updateScore(${rIdx},${mIdx})">`;
+      output += `<span>-</span>`;
+      output += `<input type="number" id="s${rIdx}-${mIdx}-2" value="${val2}" min="0" max="${race}" oninput="updateScore(${rIdx},${mIdx})">`;
+      output += `</div></div>`;
+    });
+    output += `</div>`;
+  });
+
+  document.getElementById('output').innerHTML = output;
+  document.getElementById('output').style.display = 'block';
+  isRendering = false;
+}
+
+function generateDraw() {
+  let players = document.getElementById('players').value.split(',').map(s => s.trim()).filter(s => s);
+  if (players.length < 2) { alert("Need at least 2 players!"); return; }
+  tournamentData = buildBracket(players);
+  renderBracket(true);
+  saveData();
+}
+
+function resetDraw() {
+  if (!confirm("Start new tournament?")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  document.getElementById('players').value = '';
+  document.getElementById('output').style.display = 'none';
+  document.getElementById('output').innerHTML = '';
+  tournamentData = [];
+  updateCount();
+}
+
+function shareBracket() {
+  let tournamentName = document.getElementById('tournamentName').value;
+  let text = `🏆 ${tournamentName} 🏆\n\n`;
+  tournamentData.forEach((round, rIdx) => {
+    let race = rIdx === tournamentData.length - 1? document.getElementById('finalRace').value : document.getElementById('race').value;
+    let roundName = getRoundName(round.size, round.hasByes);
+    text += `${roundName} - Race to ${race}\n`;
+    round.matches.forEach(match => {
+      let s1 = match.score1 === null? '-' : match.score1;
+      let s2 = match.score2 === null? '-' : match.score2;
+      text += `${match.p1} ${s1} - ${s2} ${match.p2}\n`;
+    });
+    text += "\n";
+  });
+  text += `\nBracket by Never Mutanga`;
+
+  if(navigator.share) {
+    navigator.share({ title: tournamentName, text: text });
+  } else {
+    navigator.clipboard.writeText(text);
+    alert("Bracket copied! Paste to WhatsApp");
+  }
+}
+
+function downloadBracket() {
+  html2canvas(document.getElementById('bracketArea'), { backgroundColor: '#0a192f', scale: 2 }).then(canvas => {
+    let link = document.createElement('a');
+    let tournamentName = document.getElementById('tournamentName').value || 'bracket';
+    link.download = tournamentName.replace(/\s+/g, '-') + '.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
+}
+
+window.onload = loadData;
+</script>
+</body>
+</html>
